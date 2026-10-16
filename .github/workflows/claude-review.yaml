@@ -36,4 +36,5 @@ jobs:
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review --comment ${{ github.event.pull_request.html_url }}'
           show_full_output: true
+          track_progress: true
           use_sticky_comment: false
