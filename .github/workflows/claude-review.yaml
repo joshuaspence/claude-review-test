@@ -28,7 +28,13 @@ jobs:
         #  CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
         uses: 'anthropics/claude-code-action@v1'
         with:
+          additional_permissions: ''
+          claude_args: ''
           claude_code_oauth_token: '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}'
+          display_report: true
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           #prompt: '/code-review:code-review --comment ${{ github.event.pull_request.html_url }}'
+          show_full_output: true
+          track_progress: true
+          use_sticky_comment: false
