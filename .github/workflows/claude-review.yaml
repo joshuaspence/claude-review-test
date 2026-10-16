@@ -41,18 +41,18 @@ jobs:
 
         uses: 'anthropics/claude-code-action@v1'
         with:
-          # The action starts the MCP servers behind these tools only when `--allowedTools` names them, even though the
-          # plugin's own `allowed-tools` lists the inline comment one.
+          # The action starts the MCP server behind this tool only when `--allowedTools` names it.
           claude_args: |
-            --allowedTools
-              'mcp__github__get_pull_request_review_comments'
-              'mcp__github_inline_comment__create_inline_comment'
+            --allowedTools 'mcp__github__get_pull_request_review_comments'
           claude_code_oauth_token: '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}'
           display_report: true
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
+
+          # Without `--comment` the plugin reports its findings in the session rather than posting them, so the
+          # verdict step can publish them and the decision as a single review.
           prompt: |
-            /code-review:code-review --comment ${{ github.event.pull_request.html_url }}
+            /code-review:code-review ${{ github.event.pull_request.html_url }}
 
             Carry on past the command's first step, which stops when Claude has already commented on the pull
             request. That guard is written for a one-off invocation; this workflow runs on every push, so an earlier
@@ -72,12 +72,22 @@ jobs:
         uses: 'anthropics/claude-code-action@v1'
         with:
           claude_args: |
-            --allowedTools 'mcp__github__create_and_submit_pull_request_review'
+            --allowedTools
+              'mcp__github__add_comment_to_pending_review'
+              'mcp__github__create_pending_pull_request_review'
+              'mcp__github__submit_pending_pull_request_review'
             --resume '${{ steps.review.outputs.session_id }}'
           claude_code_oauth_token: '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}'
           prompt: |
-            You have just reviewed this pull request. Submit that review with
-            `mcp__github__create_and_submit_pull_request_review`, always, as exactly one of three events.
+            You have just reviewed this pull request, and nothing of it has been posted yet. Publish it as one review,
+            always, ending in exactly one of three events:
+
+            1. Open a pending review on `${{ github.event.pull_request.head.sha }}` with
+               `mcp__github__create_pending_pull_request_review`.
+            2. Add each finding as an inline comment on the line it concerns with
+               `mcp__github__add_comment_to_pending_review`, once per finding.
+            3. Submit it with `mcp__github__submit_pending_pull_request_review`, its body a summary of the review and
+               the reason for the event.
 
             Your approval is the last look this pull request gets. The `master` ruleset requires one approving review,
             so yours is what makes it mergeable, and where auto-merge has been switched on it merges the moment you
@@ -115,8 +125,9 @@ jobs:
         # A comment body renders its own line breaks, so the paragraph below runs past 120 rather than arriving at the
         # pull request hard-wrapped.
         run: |
-          reviews="$(gh api "repos/${GH_REPO}/pulls/${PR}/reviews" --paginate \
-            --jq "[.[] | select(.user.login == \"claude[bot]\" and .commit_id == \"${HEAD_SHA}\")] | length")"
+          reviews="$(gh api "repos/${GH_REPO}/pulls/${PR}/reviews" --paginate --jq "[.[] | select(
+            .user.login == \"claude[bot]\" and .commit_id == \"${HEAD_SHA}\" and .state != \"PENDING\"
+          )] | length")"
 
           if [ "${reviews}" -gt 0 ]; then
             exit 0
